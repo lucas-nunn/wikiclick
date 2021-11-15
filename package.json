@@ -1,0 +1,11 @@
+{
+  "name": "wikiclick",
+  "version": "1.1.0",
+  "main": "firefox/wikiclick.js",
+  "repository": "git@github.com:lucnunn/wikiclick.git",
+  "author": "Lucas Nunn <luc.nunn@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.2.0"
+  }
+}

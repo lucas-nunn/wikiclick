@@ -1,0 +1,3 @@
+Todo:
+    - Synchronize loader and popup
+    - Prevent popup from going off bottom of screen
