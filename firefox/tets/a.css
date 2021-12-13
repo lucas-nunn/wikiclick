@@ -1,0 +1,23 @@
+.y {
+    border: 1px solid black;
+      width: 300px;
+  height: 375px; 
+  cursor: progress; 
+  background: 
+    linear-gradient(0.25turn, transparent, rgb(255, 255, 255), transparent),
+    linear-gradient(#eee, rgb(109, 109, 109)),
+    linear-gradient(#eee, #eee),
+    linear-gradient(#eee, #eee),  
+    linear-gradient(#eee, #eee),  
+    linear-gradient(#eee, #eee);
+  background-repeat: no-repeat;
+  background-size: 300px 600px, 240px 35px, 280px 200px, 260px 30px, 270px 30px, 240px 30px; 
+  background-position: -300px 0px, 10px 10px, 10px 55px, 10px 265px, 10px 300px, 10px 335px; 
+  animation: loading 1s infinite;
+}
+
+@keyframes loading {  
+  to {
+  background-position: 300px 0px, 10px 10px, 10px 55px, 10px 265px, 10px 300px, 10px 335px; 
+  }
+}

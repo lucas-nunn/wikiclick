@@ -1,5 +1,5 @@
 // ********************************************************************
-// Wikiclick Version 1.1
+// Wikiclick Version 1.2
 // Lucas Nunn <luc.nunn@gmail.com>
 //
 // A simple Firefox & Chrome extension to quickly look up Wikipedia
@@ -8,150 +8,122 @@
 // Open source, free use, whatever as long as you drop me some credit!!
 // ********************************************************************
 
-// ------------------------
-// Track most recent styles
-// ------------------------
+// ------- preserve previous styles -------
 var prevX;
 var prevY;
 var prevWidth;
 var prevType;
 
-/* Try to guess theme based on previous usage on site, or time of day */
 let prevTheme = localStorage.getItem("wikiclick-theme");
 if (prevTheme === null) {
     const time = new Date().getHours();
     if (7 <= time && time <= 20) {
         prevTheme = "light";
-    } else {
+    }
+    else {
         prevTheme = "dark";
     }
 }
 
-// -------------------------------------------------
+// -------------------------------------------
 // Get the wikipedia summary for a search term
-// @param searchTerm -> term to find wiki article for
-// @return           -> wikipedia summary object
-// -------------------------------------------------
-const getSummary = async (searchTerm) => {
-    const formattedText = searchTerm.replaceAll(" ", "_");
-    const endpoint = `https://en.wikipedia.org/api/rest_v1/page/summary/${formattedText}`;
-
-    /* Call the api and return the data */
-    try {
-        console.log(Date.now());
-        const response = await fetch(endpoint);
-        console.log(Date.now());
-        const data = await response.json();
-        console.log(Date.now());
-
-        /* Throw away crappy results */
-        if (
-            !(
-                data.extract.includes("may refer to") ||
-                data.extract.includes("most often refers to") ||
-                data.extract.includes("most commonly refers to")
-            )
-        ) {
-            return {
-                type: "wikipedia",
-                title: data.title,
-                description: data.extract,
-                url: data.content_urls.desktop.page,
-                image: data.thumbnail.source,
-            };
-        }
-    } catch (error) {
-        console.log("Wikiclick -- Wikipedia API call failed");
-    }
-
-    /* Return google search link */
-    const formatGoogle = formattedText.replaceAll("_", "+");
+// searchTerm - term to find wiki article for
+// return     - wikipedia summary object
+// -------------------------------------------
+const getData = async (searchTerm) => {
+    /* format the text */
+    const formatAPI = searchTerm.replaceAll(" ", "_");
+    const endpoint  = `https://en.wikipedia.org/api/rest_v1/page/summary/${formatAPI}`;
+    const formatGoogle = formatAPI.replaceAll("_", "+");
     if (searchTerm.length > 50) {
         searchTerm = `${searchTerm.substring(0, 47)}...`;
     }
-    return {
-        type: "google",
+
+    /* default return if no result */
+    const fail = {
+        type  : "google",
         search: searchTerm,
-        url: `https://www.google.com/search?q=${formatGoogle}`,
+        url   : `https://www.google.com/search?q=${formatGoogle}`,
     };
-};
 
-// -------------------------------------------------------
-// Add the wikipedia summary popup at the highlighted term
-// @param xPosition -> x coordinate to place on screen
-// @param yPosition -> y coordinate to place on screen
-// @param wikiData  -> data from wikipedia search
-// -------------------------------------------------------
-const addPopup = (xPosition, yPosition, wikiData) => {
-    wikiclick.href = wikiData.url;
-    let width = 300;
+    /* call the api and return the data */
+    try {
+        const res = await fetch(endpoint);
+        const data = await res.json();
 
-    /* Wikipedia result */
-    if (wikiData.type === "wikipedia") {
-        title.innerHTML = wikiData.title;
-        image.src = wikiData.image;
-        summary.innerHTML = wikiData.description;
-
-        /* Rough calculation of good width */
-        if (wikiData.description.length > 900) {
-            width = 400;
+        if (
+            data.extract.includes("may refer to") ||
+            data.extract.includes("most often refers to") ||
+            data.extract.includes("most commonly refers to")
+        ) {
+            return fail;
+        } else {
+            return {
+                type       : "wikipedia",
+                title      : data.title,
+                description: data.extract,
+                url        : data.content_urls.desktop.page,
+                image      : data.thumbnail.source,
+            };
         }
-    } else {
-        /* No wiki result, link to google search */
-        title.innerHTML = "No result";
-        summary.innerHTML = `Click to search Google for: <span>${wikiData.search}</span>`;
     }
-
-    /* Keep the popup on the screen */
-    if (xPosition + width + 15 > window.screen.width) {
-        xPosition = window.screen.width - width - 15;
+    catch {
+        console.log("Wikiclick -- No result from Wikipedia API");
+        return fail;
     }
-
-    setPopupStyle(xPosition, yPosition, width, prevTheme, wikiData.type);
-    shadowHost.style.display = "block";
 };
 
 // -------------------------------------------------------
 // Add the wikipedia summary popup at the highlighted term
-// @param xPosition -> x coordinate to place on screen
-// @param yPosition -> y coordinate to place on screen
-// @param wikiData  -> data from wikipedia search
+// xPosition - x coordinate to place on screen
+// yPosition - y coordinate to place on screen
+// wikiData  - data from wikipedia search
 // -------------------------------------------------------
-const addLoader = (xPosition, yPosition) => {
+const addPopup = async (xPosition, yPosition, searchTerm) => {
     /* Keep the popup on the screen */
     if (xPosition + 315 > window.screen.width) {
         xPosition = window.screen.width - 315;
     }
 
+    /* add loading indicator */
+    shadow.appendChild(wikiclick);
     setLoaderStyle(xPosition, yPosition);
-    shadowHost.style.display = "block";
+
+    /* get data from Wikipedia api */
+    const wikiData = await getData(searchTerm)
+
+    /* add final popup */
+    wikiclick.href = wikiData.url;
+    if (wikiData.type === "wikipedia") {
+        title.innerHTML   = wikiData.title;
+        image.src         = wikiData.image;
+        summary.innerHTML = wikiData.description;
+    }
+    else {
+        title.innerHTML   = "No result";
+        summary.innerHTML = `Click to search Google for: <span>${wikiData.search}</span>`;
+    }
+
+    setPopupStyle(xPosition, yPosition, 300, prevTheme, wikiData.type);
 };
 
 // -----------------------------------------------------------------------
 // Detect a term has been highlighted, trigger popup creation and addition
-// @param e -> event object
+// e - event object
 // -----------------------------------------------------------------------
-const handleHighlight = async (e) => {
+const onHighlight = (e) => {
     let selectedText = ""; /* Highlighted text */
     let xPosition = e.pageX; /* X position of highlight */
     let yPosition = e.pageY; /* Y position of highlight */
     let element = e.target; /* HTML element we are clicking on */
 
     if (e.altKey && element.className !== "wikiclick") {
-        /* Get selected text */
         selectedText = window.getSelection().toString().trim();
         if (selectedText.length > 0) {
-            addLoader(xPosition, yPosition + 10);
-            getSummary(selectedText).then((wikidata) => {
-                addPopup(xPosition, yPosition + 10, wikidata);
-            });
-            return;
+            addPopup(xPosition, yPosition + 10, selectedText);
         }
-    }
-
-    /* Unless we are clicking on the popup itself, remove it */
-    if (element.className !== "wikiclick") {
-        shadowHost.style.display = "none";
+    } else if (element.className !== "wikiclick") {
+        wikiclick.remove();
     }
 };
 
@@ -159,41 +131,32 @@ const handleHighlight = async (e) => {
 // A beautiful popup component
 // ---------------------------
 
-/*
- * Use shadow dom to avoid any styles from website
- */
+// ------- use shadow dom to avoid any styles from website -------
 const shadowHost = document.createElement("div");
 shadowHost.className = "wikiclick";
-shadowHost.style.display = "none";
 document.body.insertBefore(shadowHost, document.body.firstChild);
 const shadow = shadowHost.attachShadow({ mode: "open" });
 
-/*
- * Main container
- */
+// ------- main container -------
 const wikiclick = document.createElement("a");
 wikiclick.id = "wikiclick-container";
 wikiclick.target = "_blank";
 wikiclick.rel = "noopener noreferrer";
 wikiclick.onclick = () => {
-    shadowHost.style.display = "none";
+    wikiclick.remove();
 };
 
-/* Hold the title and the theme switcher */
+// ------- hold the title and the theme switcher --------
 const titlebar = document.createElement("div");
 titlebar.id = "wikiclick-titlebar";
 titlebar.className = "wikiclick";
 
-/*
- * Title
- */
+// ------- title -------
 const title = document.createElement("h1");
 title.id = "wikiclick-title";
 title.className = "wikiclick";
 
-/*
- * Dark/light mode switcher
- */
+// ------- Dark/light mode switcher --------
 const switcher = document.createElement("button");
 switcher.id = "wikiclick-switcher";
 switcher.className = "wikiclick";
@@ -210,37 +173,26 @@ switcher.onclick = (e) => {
     localStorage.setItem("wikiclick-theme", dark ? "light" : "dark");
 };
 
-/*
- * Wikipedia thumbnail
- */
+// ------- Wikipedia thumbnail --------
 const image = document.createElement("img");
 image.className = "wikiclick";
 image.id = "wikiclick-image";
 image.alt = "no wiki image but have a good day :)";
 
-/*
- * Wikipedia summary
- */
+// ------- Wikipedia summary -------
 const summary = document.createElement("p");
 summary.className = "wikiclick";
 summary.id = "wikiclick-summary";
 
-/*
- * Loading animation
- */
+// ------- Loading animation -------
 const loader = document.createElement("div");
 loader.id = "wikiclick-loader";
 
-/*
- * Style all the elements
- */
+// ------- Style all the elements -------
 const style = document.createElement("style");
 
-/*
- * Merge all the elements together
- */
+// ------- Merge all the elements together -------
 shadow.appendChild(style);
-shadow.appendChild(wikiclick);
 wikiclick.appendChild(loader);
 wikiclick.appendChild(titlebar);
 titlebar.appendChild(title);
@@ -248,6 +200,11 @@ titlebar.appendChild(switcher);
 wikiclick.appendChild(image);
 wikiclick.appendChild(summary);
 
+// ---------------------------------
+// Set style for loading indicator
+// x - x coordinate of the popup
+// y - y coordinate of the popup
+// ---------------------------------
 const setLoaderStyle = (x, y) => {
     const dark = prevTheme === "dark";
 
@@ -281,30 +238,38 @@ const setLoaderStyle = (x, y) => {
         }
 
         #wikiclick-loader {
-            border: 3px solid lightgrey;
-            border-top: 3px solid grey;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 10px;
+            width: 300px;
+            height: 375px; 
+            cursor: progress; 
+            background-color: ${dark ? "#202124" : "white"};
+            background: 
+                linear-gradient(0.25turn, transparent, ${dark ? "black" : "white"}, transparent),
+                linear-gradient(${dark ? "#303030" : "#eee"}, ${dark ? "#303030" : "#eee"}),
+                linear-gradient(${dark ? "#303030" : "#eee"}, ${dark ? "#303030" : "#eee"}),
+                linear-gradient(${dark ? "#303030" : "#eee"}, ${dark ? "#303030" : "#eee"}),
+                linear-gradient(${dark ? "#303030" : "#eee"}, ${dark ? "#303030" : "#eee"});
+            background-repeat: no-repeat;
+            background-size: 300px 600px, 240px 35px, 280px 200px, 260px 30px, 270px 30px, 240px 30px; 
+            background-position: -300px 0px, 10px 10px, 10px 55px, 10px 265px, 10px 300px, 10px 335px; 
+            animation: loading 1s infinite;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }        
+        @keyframes loading {  
+            to {
+                background-position: 300px 0px, 10px 10px, 10px 55px, 10px 265px, 10px 300px, 10px 335px; 
+            }
+        }
    `;
 };
 
-// -----------------------------------------
-// Set the style position of the popup
-// @param x -> x coordinate of the popup
-// @param y -> y coordinate of the popup
-// @param width -> width of popup
-// @param theme -> dark or light mode
-// @param type -> wikipedia or google search
-// -----------------------------------------
+// ---------------------------------
+// Set style for results popup
+// x - x coordinate of the popup
+// y - y coordinate of the popup
+// width - width of popup
+// theme - dark or light mode
+// type - wikipedia or google search
+// ---------------------------------
 const setPopupStyle = (x, y, width, theme, type) => {
     const dark = theme === "dark";
 
@@ -389,4 +354,4 @@ const setPopupStyle = (x, y, width, theme, type) => {
 // --------------------------------------------------
 // Look for highlighted text after mouse click lifted
 // --------------------------------------------------
-document.onmouseup = handleHighlight;
+document.onmouseup = onHighlight;
